@@ -78,12 +78,13 @@ class BigramLanguageModel(nn.Module):
     
     def forward(self, idx, target):
         logits = self.token_embedding_table(idx)
+        # TODO: implement the forward logic
         loss = F.cross_entropy(logits, target)
         return logits, loss
     
     def generate(self, idx, max_new_tokens=100):
         for _ in range(max_new_tokens):
-            
+            # TODO: implement the generation logic
 
 model = BigramLanguageModel(vocab_size)
 logits, loss = model(xb, yb)
