@@ -76,15 +76,27 @@ class BigramLanguageModel(nn.Module):
     
     def __init__(self, vocab_size):
         super().__init__()
+        # 在 bigrammodel 中 vocab_size 和 embedding_dim 一样，是因为我们本质上是通过前一个字符来预测下一个字符
+        # 就是一个简单的线性模型/分类器
+        # Example:
+        # 1. One-hot encoding: Embedding(vocab_size, vocab_size)
+        # 2. Bigram model: Embedding(vocab_size, vocab_size)
+        # 3. GPT model: Embedding(vocab_size, embedding_dim) + Linear(embedding_dim, vocab_size)
+        # about linear, I made a small lab to show how linear works: https://colab.research.google.com/drive/1uU_lbhfzE7LTVzTdr8fuiu4JspGAOY6e#scrollTo=O6MVsRwbxMXE
         self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
     
     def forward(self, idx, target):
+        print("idx shape: ", idx.shape)
+        print("target shape: ", target.shape)
         # logits: the prediction for the next character
-        # idx: the input character
-        logits = self.token_embedding_table(idx)
+        # idx: the input character (B, T) (batch_size, block_size)
+        # target: the target character (B, T) (batch_size, block_size)
+        # logits: (batch_size, block_size, vocab_size)
+        logits = self.token_embedding_table(idx) # B, T, C 4, 8, 65
         print("logits shape: ", logits.shape)
-        # logits shape: (batch_size, block_size, vocab_size) 256, 8, 65
-        loss = F.cross_entropy(logits, target)
+        # F.cross_entropy requires (B, T, C) to be reshaped to (B*T, C)
+        # and target to be reshaped to (B*T,)
+        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1)) # B*T, C
         return logits, loss
     
     # def generate(self, idx, max_new_tokens=100):
