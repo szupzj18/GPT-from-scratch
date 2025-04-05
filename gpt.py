@@ -1,6 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+# hyperparameters
+block_size = 8 # length of sequence
+batch_size = 4 # batch size
+learning_rate = 1e-3 # learning rate
+max_iters = 10000 # number of iterations
+eval_interval = 1000 # evaluation interval
 # use GPU if available.
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -36,9 +42,6 @@ data = torch.tensor(encoder(text), dtype=torch.long)
 n = int(0.9*len(data)) # 90% of the data for training
 train_data, val_data = data[:n], data[n:] # last 10% for validation
 
-
-block_size = 8 # length of sequence
-batch_size = 4 # batch size
 # step4: create batches
 print("first block: ", train_data[:block_size+1])
 
@@ -144,11 +147,11 @@ print("v0 generate: ", decoder(output))
 
 # step6: training
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
 batch_size = 32
 
-for steps in range(10000):
+for steps in range(max_iters):
     # get batch
     xb, yb = get_batch('train')
     # forward pass
@@ -158,7 +161,7 @@ for steps in range(10000):
     loss.backward()
     optimizer.step()
     
-    if steps % 100 == 0:
+    if steps % eval_interval == 0:
         print(f"steps: {steps}, loss: {loss.item()}")
         output = model.generate(idx=torch.zeros((1, 1), dtype=torch.long), max_new_tokens=100)[0].tolist()
         print("v1 generate: ", decoder(output))
