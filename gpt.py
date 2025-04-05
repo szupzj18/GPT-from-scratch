@@ -3,6 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 # use GPU if available.
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+# this tutorial is based on previous "make more" series
+# https://www.youtube.com/watch?v=8rj0g2c4v6E&list=PLoROMvodv4rO2Xk1a3b7d5c9e8f3a1a5b&index=1
+
 # step1: load the data
 with open ("input.txt", "r") as file:
     text=file.read()
@@ -110,22 +114,23 @@ class BigramLanguageModel(nn.Module):
         return logits, loss
     
     def generate(self, idx, max_new_tokens=100):
+        # 作为一个 bigram model，这里其实可以优化为每次只从上一个字符中预测下一个字符，不需要输入整个序列
+        # 相当于历史信息没有被使用，但是未来可以扩展到类似 GPT 的模型
         for _ in range(max_new_tokens):
-            for _ in range(max_new_tokens):
-                # idx: (B, T)
-                # logits: (B, T, C)
-                logits, loss = self(idx, None)
-                logits = logits[:, -1, :] # (B, C) only use the last time step to predict the next character
-                # NOTE: logits 最终 softmax 之前，可以通过 temperature 参数来控制生成内容的采样分布。
-                # temperature = 1 表示原始的分布，temperature < 1 表示更集中（更保守），temperature > 1 表示更平滑（更发散）
-                # e.g. temperature = 0.8
-                # logits = logits / 0.8 # temperature scaling
-                probs = F.softmax(logits, dim=-1) # generate the probability distribution
-                # sample from the distribution, which means it's not deterministic, its random but based on the probability
-                idx_next = torch.multinomial(probs, num_samples=1)
-                idx = torch.cat((idx, idx_next), dim=1) # contact predict to origin idx (B, T+1)
-                
-            return idx
+            # idx: (B, T)
+            # logits: (B, T, C)
+            logits, loss = self(idx, None)
+            logits = logits[:, -1, :] # (B, C) only use the last time step to predict the next character
+            # NOTE: logits 最终 softmax 之前，可以通过 temperature 参数来控制生成内容的采样分布。
+            # temperature = 1 表示原始的分布，temperature < 1 表示更集中（更保守），temperature > 1 表示更平滑（更发散）
+            # e.g. temperature = 0.8
+            # logits = logits / 0.8 # temperature scaling
+            probs = F.softmax(logits, dim=-1) # generate the probability distribution
+            # sample from the distribution, which means it's not deterministic, its random but based on the probability
+            idx_next = torch.multinomial(probs, num_samples=1)
+            idx = torch.cat((idx, idx_next), dim=1) # contact predict to origin idx (B, T+1)
+            
+        return idx
 
 model = BigramLanguageModel(vocab_size)
 logits, loss = model(xb, yb)
@@ -138,3 +143,6 @@ output = model.generate(idx=torch.zeros((1, 1), dtype=torch.long), max_new_token
 print("v0 generate: ", decoder(output))
 
 # step6: training
+
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+
