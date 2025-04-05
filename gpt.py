@@ -85,28 +85,56 @@ class BigramLanguageModel(nn.Module):
         # about linear, I made a small lab to show how linear works: https://colab.research.google.com/drive/1uU_lbhfzE7LTVzTdr8fuiu4JspGAOY6e#scrollTo=O6MVsRwbxMXE
         self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
     
-    def forward(self, idx, target):
+    def forward(self, idx, target=None):
         print("idx shape: ", idx.shape)
-        print("target shape: ", target.shape)
+        
         # logits: the prediction for the next character
         # idx: the input character (B, T) (batch_size, block_size)
         # target: the target character (B, T) (batch_size, block_size)
         # logits: (batch_size, block_size, vocab_size)
         logits = self.token_embedding_table(idx) # B, T, C 4, 8, 65
-        print("logits shape: ", logits.shape)
-        # F.cross_entropy requires (B, T, C) to be reshaped to (B*T, C)
-        # and target to be reshaped to (B*T,)
-        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1)) # B*T, C
+            
+        if target is None:
+            loss = None
+        else:
+            print("target shape: ", target.shape)
+            
+            # F.cross_entropy requires (B, T, C) to be reshaped to (B*T, C)
+            # and target to be reshaped to (B*T,)
+            # B, T, C = logits.shape
+            # logits = logits.view(B*T, C) # B*T, C
+            # target = target.view(B*T) # B*T,
+            # NOTE: target.view(-1) is same as target.view(B*T)
+            # print("logits.view(-1) shape: ", logits.view(-1).shape);
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1)) # B*T, C
         return logits, loss
     
-    # def generate(self, idx, max_new_tokens=100):
-    #     for _ in range(max_new_tokens):
-    #         # TODO: implement the next token generation logic
-    #         return
+    def generate(self, idx, max_new_tokens=100):
+        for _ in range(max_new_tokens):
+            for _ in range(max_new_tokens):
+                # idx: (B, T)
+                # logits: (B, T, C)
+                logits, loss = self(idx, None)
+                logits = logits[:, -1, :] # (B, C) only use the last time step to predict the next character
+                # NOTE: logits 最终 softmax 之前，可以通过 temperature 参数来控制生成内容的采样分布。
+                # temperature = 1 表示原始的分布，temperature < 1 表示更集中（更保守），temperature > 1 表示更平滑（更发散）
+                # e.g. temperature = 0.8
+                # logits = logits / 0.8 # temperature scaling
+                probs = F.softmax(logits, dim=-1) # generate the probability distribution
+                # sample from the distribution, which means it's not deterministic, its random but based on the probability
+                idx_next = torch.multinomial(probs, num_samples=1)
+                idx = torch.cat((idx, idx_next), dim=1) # contact predict to origin idx (B, T+1)
+                
+            return idx
 
 model = BigramLanguageModel(vocab_size)
 logits, loss = model(xb, yb)
+print("logits shape: ", logits.shape)
 print("loss: ", loss)
+# 使用 [[0]] 来初始化模型的输入
+# 这里的 [[0]] 是一个 batch size 为 1 的输入，用来初始化模型输入，然后连续生成 100 个字符
+# 最后 tolist 将张量转换为列表
+output = model.generate(idx=torch.zeros((1, 1), dtype=torch.long), max_new_tokens=100)[0].tolist()
+print("v0 generate: ", decoder(output))
 
-# output = model.generate(idx=torch.zeros((1, 1), dtype=torch.long), max_new_tokens=100)[0].tolist()
-# print("v0 generate: ", decoder(output))
+# step6: training
