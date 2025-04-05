@@ -7,8 +7,12 @@ batch_size = 4 # batch size
 learning_rate = 1e-3 # learning rate
 max_iters = 10000 # number of iterations
 eval_interval = 1000 # evaluation interval
+eval_iters = 200 # number of evaluation iterations
 # use GPU if available.
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+print("device: ", device)
+# NOTE: this is a simple bigram model, which is a simple linear model
+# that predicts the next character based on the previous character
 
 # this tutorial is based on previous "make more" series
 # https://www.youtube.com/watch?v=8rj0g2c4v6E&list=PLoROMvodv4rO2Xk1a3b7d5c9e8f3a1a5b&index=1
@@ -54,6 +58,7 @@ for t in range(block_size):
     target = y[t]
     # print(f"when input is {context}, target is {target}")
 
+# data loader
 # batch function to create training and validation batches
 # return: context batch and validation target values
 def get_batch(split):
@@ -62,6 +67,8 @@ def get_batch(split):
     idx = torch.randint(len(data) - block_size, (batch_size,)) # random idx for batch split
     context = torch.stack([data[i:i+block_size] for i in idx]) 
     target = torch.stack([data[i+1:i+block_size+1] for i in idx]) # target is the next character
+    context = context.to(device) # move to GPU if available
+    target = target.to(device) # move to GPU if available
     return context, target
 
 xb, yb = get_batch('train')
@@ -70,6 +77,20 @@ print("context :", xb)
 print("target shape: ", yb.shape)
 print("target :", yb)
 
+@torch.no_grad()
+def estimate_loss():
+    out = {}
+    model.eval() # set the model to evaluation mode
+    for split in ['train', 'val']:
+        losses = torch.zeros(eval_iters)
+        for k in range(eval_iters):
+            X, Y = get_batch(split)
+            logits, loss = model(X, Y)
+            losses[k] = loss.item()
+        out[split] = losses.mean()
+    model.train() # set the model back to training mode
+    return out
+    
 # decode
 # print("context decoed: ", decoder(xb[0].tolist()))
 # print("validation ")
@@ -136,6 +157,7 @@ class BigramLanguageModel(nn.Module):
         return idx
 
 model = BigramLanguageModel(vocab_size)
+model = model.to(device) # move to GPU if available
 logits, loss = model(xb, yb)
 print("logits shape: ", logits.shape)
 print("loss: ", loss)
@@ -162,6 +184,11 @@ for steps in range(max_iters):
     optimizer.step()
     
     if steps % eval_interval == 0:
-        print(f"steps: {steps}, loss: {loss.item()}")
-        output = model.generate(idx=torch.zeros((1, 1), dtype=torch.long), max_new_tokens=100)[0].tolist()
-        print("v1 generate: ", decoder(output))
+        losses = estimate_loss()
+        print(f"step {steps}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        
+# step 7: output the model
+context = torch.zeros((1, 1), dtype=torch.long, device=device) # (B, T)
+output = model.generate(idx=context, max_new_tokens=400)[0].tolist()
+print("------------\n")
+print("v2 generate: \n", decoder(output))
