@@ -90,7 +90,7 @@ class BigramLanguageModel(nn.Module):
         self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
     
     def forward(self, idx, target=None):
-        print("idx shape: ", idx.shape)
+        # print("idx shape: ", idx.shape)
         
         # logits: the prediction for the next character
         # idx: the input character (B, T) (batch_size, block_size)
@@ -101,7 +101,7 @@ class BigramLanguageModel(nn.Module):
         if target is None:
             loss = None
         else:
-            print("target shape: ", target.shape)
+            # print("target shape: ", target.shape)
             
             # F.cross_entropy requires (B, T, C) to be reshaped to (B*T, C)
             # and target to be reshaped to (B*T,)
@@ -146,3 +146,19 @@ print("v0 generate: ", decoder(output))
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 
+batch_size = 32
+
+for steps in range(10000):
+    # get batch
+    xb, yb = get_batch('train')
+    # forward pass
+    logits, loss = model(xb, yb)
+    # backward pass
+    optimizer.zero_grad(set_to_none=True) # set_to_none=True is a new feature in pytorch 1.12
+    loss.backward()
+    optimizer.step()
+    
+    if steps % 100 == 0:
+        print(f"steps: {steps}, loss: {loss.item()}")
+        output = model.generate(idx=torch.zeros((1, 1), dtype=torch.long), max_new_tokens=100)[0].tolist()
+        print("v1 generate: ", decoder(output))
