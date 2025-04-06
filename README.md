@@ -7,7 +7,7 @@ YouTube source: https://www.youtube.com/watch?v=kCc8FmEb1nY
 build a simple language model using pytorch & cuda.
 
 - [x] basic Bigram Model
-- [ ] Self-attention
+- [x] v2 with Self-attention
 
 ## Getting started
 
