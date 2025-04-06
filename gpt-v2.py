@@ -14,6 +14,8 @@ eval_iters = 200 # number of evaluation iterations
 # use GPU if available.
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print("device: ", device)
+n_embd = 32 # embedding dimension
+
 # NOTE: this is a simple bigram model, which is a simple linear model
 # that predicts the next character based on the previous character
 
@@ -105,16 +107,17 @@ def estimate_loss():
 torch.manual_seed(42)
 class BigramLanguageModel(nn.Module):
     
-    def __init__(self, vocab_size):
+    def __init__(self):
         super().__init__()
         # 在 bigrammodel 中 vocab_size 和 embedding_dim 一样，是因为我们本质上是通过前一个字符来预测下一个字符
-        # 就是一个简单的线性模型/分类器
+        # 这里的 vocab_size 和 embedding_dim 是可以不一样的
         # Example:
         # 1. One-hot encoding: Embedding(vocab_size, vocab_size)
         # 2. Bigram model: Embedding(vocab_size, vocab_size)
         # 3. GPT model: Embedding(vocab_size, embedding_dim) + Linear(embedding_dim, vocab_size)
         # about linear, I made a small lab to show how linear works: https://colab.research.google.com/drive/1uU_lbhfzE7LTVzTdr8fuiu4JspGAOY6e#scrollTo=O6MVsRwbxMXE
-        self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
+        self.token_embedding_table = nn.Embedding(vocab_size, n_embd) # vocab_size, C
+        self.lm_head = nn.Linear(n_embd, vocab_size) # C, vocab_size
     
     def forward(self, idx, target=None):
         # print("idx shape: ", idx.shape)
@@ -123,8 +126,9 @@ class BigramLanguageModel(nn.Module):
         # idx: the input character (B, T) (batch_size, block_size)
         # target: the target character (B, T) (batch_size, block_size)
         # logits: (batch_size, block_size, vocab_size)
-        logits = self.token_embedding_table(idx) # B, T, C 4, 8, 65
-            
+        token_embd = self.token_embedding_table(idx) # B, T, C 4, 8, 32
+        logits = self.lm_head(token_embd) # B, T, vocab_size 4, 8, 65
+        
         if target is None:
             loss = None
         else:
@@ -159,7 +163,7 @@ class BigramLanguageModel(nn.Module):
             
         return idx
 
-model = BigramLanguageModel(vocab_size)
+model = BigramLanguageModel()
 model = model.to(device) # move to GPU if available
 logits, loss = model(xb, yb)
 print("logits shape: ", logits.shape)
