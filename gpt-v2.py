@@ -117,17 +117,24 @@ class BigramLanguageModel(nn.Module):
         # 3. GPT model: Embedding(vocab_size, embedding_dim) + Linear(embedding_dim, vocab_size)
         # about linear, I made a small lab to show how linear works: https://colab.research.google.com/drive/1uU_lbhfzE7LTVzTdr8fuiu4JspGAOY6e#scrollTo=O6MVsRwbxMXE
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd) # vocab_size, C
-        self.lm_head = nn.Linear(n_embd, vocab_size) # C, vocab_size
+        # encode the position of the token in the sequence, 同一个 token 出现在不同位置的含义是不同的，所以我们对位置编码
+        # 由于位置信息被 embedding 了，所以 block_size 决定了模型的上下文长度，也就是模型一步“学习”能够看到的 token 的数量
+        # 这就有点像我们的注意力机制了，你阅读一段文字的时候，可能最多会关注到前面的几个字/几句话。
+        self.position_embedding_table = nn.Embedding(block_size, n_embd) # block_size, C
+        self.lm_head = nn.Linear(n_embd, vocab_size) # C, vocab_size 将 embedding 映射回 vocab_size
     
     def forward(self, idx, target=None):
         # print("idx shape: ", idx.shape)
-        
+        B, T = idx.shape # B: batch size, T: block size
+        print("idx shape: ", idx.shape)
         # logits: the prediction for the next character
         # idx: the input character (B, T) (batch_size, block_size)
         # target: the target character (B, T) (batch_size, block_size)
         # logits: (batch_size, block_size, vocab_size)
         token_embd = self.token_embedding_table(idx) # B, T, C 4, 8, 32
-        logits = self.lm_head(token_embd) # B, T, vocab_size 4, 8, 65
+        print("token_embd: ", token_embd.shape)
+        x = token_embd + self.position_embedding_table(torch.arange(T, device=device)) # B, T, C 4, 8, 32
+        logits = self.lm_head(x) # B, T, vocab_size 4, 8, 65
         
         if target is None:
             loss = None
