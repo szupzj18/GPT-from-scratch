@@ -105,6 +105,18 @@ def estimate_loss():
 
 # step5: model
 torch.manual_seed(42)
+
+class Head(nn.Module):
+    '''one head of self attention'''
+    def __init__(self, head_size):
+        super().__init__()
+        self.key = nn.Linear(n_embd, head_size, bias=False)
+        self.query = nn.Linear(n_embd, head_size, bias=False)
+        self.value = nn.Linear(n_embd, head_size, bias=False)
+        self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size))) # lower triangular matrix
+        
+        
+        
 class BigramLanguageModel(nn.Module):
     
     def __init__(self):
