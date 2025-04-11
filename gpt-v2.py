@@ -115,7 +115,23 @@ class Head(nn.Module):
         self.value = nn.Linear(n_embd, head_size, bias=False)
         self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size))) # lower triangular matrix
         
-        
+    def forward(self, x):
+        B, T, C = x.shape
+        # compute query, key, value
+        k = self.key(x)
+        q = self.query(x)
+        v = self.value(x)
+        # compute attention scores
+        # tril: lower triangular matrix, so that we only attend to the previous tokens
+        # (B, T, T) = (B, T, C) @ (B, C, T)
+        # NOTE: tril is a buffer, so it will not be updated during training
+        wei = (q @ k.transpose(-2, -1)) * (C ** -0.5) # (B, T, T)
+        wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf')) # (B, T, T)
+        wei = F.softmax(wei, dim=-1) # (B, T, T)
+        # compute output
+        out = wei @ v # (B, T, T) @ (B, T, C) -> (B, T, C)
+        return out
+    
         
 class BigramLanguageModel(nn.Module):
     
