@@ -121,7 +121,7 @@ class Head(nn.Module):
         k = self.key(x)
         q = self.query(x)
         v = self.value(x)
-        # compute attention scores
+        # compute attention scores (affinities)
         # tril: lower triangular matrix, so that we only attend to the previous tokens
         # (B, T, T) = (B, T, C) @ (B, C, T)
         # NOTE: tril is a buffer, so it will not be updated during training
@@ -149,19 +149,19 @@ class BigramLanguageModel(nn.Module):
         # 由于位置信息被 embedding 了，所以 block_size 决定了模型的上下文长度，也就是模型一步“学习”能够看到的 token 的数量
         # 这就有点像我们的注意力机制了，你阅读一段文字的时候，可能最多会关注到前面的几个字/几句话。
         self.position_embedding_table = nn.Embedding(block_size, n_embd) # block_size, C
+        self.sa_head = Head(n_embd)
         self.lm_head = nn.Linear(n_embd, vocab_size) # C, vocab_size 将 embedding 映射回 vocab_size
     
     def forward(self, idx, target=None):
         # print("idx shape: ", idx.shape)
         B, T = idx.shape # B: batch size, T: block size
-        print("idx shape: ", idx.shape)
         # logits: the prediction for the next character
         # idx: the input character (B, T) (batch_size, block_size)
         # target: the target character (B, T) (batch_size, block_size)
         # logits: (batch_size, block_size, vocab_size)
         token_embd = self.token_embedding_table(idx) # B, T, C 4, 8, 32
-        print("token_embd: ", token_embd.shape)
-        x = token_embd + self.position_embedding_table(torch.arange(T, device=device)) # B, T, C 4, 8, 32
+        pos_embd = self.position_embedding_table(torch.arange(T, device=device)) # B, T, C 4, 8, 32
+        x = token_embd + pos_embd # B, T, C 4, 8, 32
         logits = self.lm_head(x) # B, T, vocab_size 4, 8, 65
         
         if target is None:
@@ -183,14 +183,18 @@ class BigramLanguageModel(nn.Module):
         # 作为一个 bigram model，这里其实可以优化为每次只从上一个字符中预测下一个字符，不需要输入整个序列
         # 相当于历史信息没有被使用，但是未来可以扩展到类似 GPT 的模型
         for _ in range(max_new_tokens):
+            # print("idx shape: ", idx.shape)
+            idx_condition = idx[:, -block_size:] # (B, T) 只保留最后 block_size 个字符
+            # print("idx_condition shape: ", idx_condition.shape)
             # idx: (B, T)
             # logits: (B, T, C)
-            logits, loss = self(idx, None)
+            logits, loss = self(idx_condition, None)
             logits = logits[:, -1, :] # (B, C) only use the last time step to predict the next character
             # NOTE: logits 最终 softmax 之前，可以通过 temperature 参数来控制生成内容的采样分布。
             # temperature = 1 表示原始的分布，temperature < 1 表示更集中（更保守），temperature > 1 表示更平滑（更发散）
-            # e.g. temperature = 0.8
-            # logits = logits / 0.8 # temperature scaling
+            # e.g.  
+            # temperature = 0.8
+            # logits = logits / temperature # temperature scaling
             probs = F.softmax(logits, dim=-1) # generate the probability distribution
             # sample from the distribution, which means it's not deterministic, its random but based on the probability
             idx_next = torch.multinomial(probs, num_samples=1)
