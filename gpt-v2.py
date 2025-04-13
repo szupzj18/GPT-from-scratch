@@ -8,7 +8,7 @@ import torch.nn.functional as F
 block_size = 8 # length of sequence 模型能够看到的上下文长度，一次性输入的 token 数量
 batch_size = 4 # batch size
 learning_rate = 1e-3 # learning rate
-max_iters = 10000 # number of iterations
+max_iters = 9000 # number of iterations
 eval_interval = 1000 # evaluation interval
 eval_iters = 200 # number of evaluation iterations
 # use GPU if available.
@@ -144,6 +144,21 @@ class MultiHeadAttention(nn.Module):
     def forward(self, x):
         return torch.cat([h(x) for h in self.heads], dim=-1) # (B, T, C) -> (B, T, num_heads * head_size)
     
+class FeedForward(nn.Module):
+    """a simple feed forward layer"""
+    # FFN 的作用是将每个 token 的表示进行线性变换，然后通过一个非线性激活函数进行映射
+    
+    def __init__(self, n_embd):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(n_embd, n_embd),
+            nn.ReLU(),
+        )
+        # output: (batch_size, n_embd)
+        
+    def forward(self, x):
+        return self.net(x)
+        
 class BigramLanguageModel(nn.Module):
     
     def __init__(self):
@@ -161,6 +176,8 @@ class BigramLanguageModel(nn.Module):
         # 这就有点像我们的注意力机制了，你阅读一段文字的时候，可能最多会关注到前面的几个字/几句话。
         self.position_embedding_table = nn.Embedding(block_size, n_embd) # block_size, C
         self.sa_heads = MultiHeadAttention(num_heads=4, head_size=n_embd//4) # 4 heads, 32/4 = 8
+        self.ffw = FeedForward(n_embd) # feed forward network
+        # 这里的 ffw 是一个简单的线性层，实际上可以是一个更复杂的网络
         self.lm_head = nn.Linear(n_embd, vocab_size) # C, vocab_size 将 embedding 映射回 vocab_size
     
     def forward(self, idx, target=None):
@@ -174,6 +191,7 @@ class BigramLanguageModel(nn.Module):
         pos_embd = self.position_embedding_table(torch.arange(T, device=device)) # B, T, C 4, 8, 32
         x = token_embd + pos_embd # B, T, C 4, 8, 32
         x = self.sa_heads(x) # B, T, C 4, 8, 32
+        x = self.ffw(x)
         # print("x shape: ", x.shape)
         logits = self.lm_head(x) # B, T, vocab_size 4, 8, 65
         
