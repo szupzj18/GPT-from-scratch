@@ -158,7 +158,21 @@ class FeedForward(nn.Module):
         
     def forward(self, x):
         return self.net(x)
-        
+
+class Block(nn.Module):
+    """attention block"""
+    def __init__(self, n_embd, n_heads):
+        super().__init__()
+        head_size = n_embd // n_heads
+        self.sa = MultiHeadAttention(num_heads=n_heads, head_size=head_size) # multi-head attention
+        self.ffw = FeedForward(n_embd)
+    
+    def forward(self, x):
+        # residual connection
+        x = self.sa(x)
+        x = self.ffw(x)
+        return x
+    
 class BigramLanguageModel(nn.Module):
     
     def __init__(self):
