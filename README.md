@@ -8,7 +8,7 @@ build a simple language model using pytorch & cuda.
 
 - [x] basic Bigram Model
 - [x] v2 with Self-attention
-- [ ] add multi head attention.
+- [x] multi head attention.(in gpt-v2.py)
 
 ## Getting started
 

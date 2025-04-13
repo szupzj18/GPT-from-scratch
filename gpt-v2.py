@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 # hyperparameters
-block_size = 8 # length of sequence
+block_size = 8 # length of sequence 模型能够看到的上下文长度，一次性输入的 token 数量
 batch_size = 4 # batch size
 learning_rate = 1e-3 # learning rate
 max_iters = 10000 # number of iterations
@@ -116,9 +116,10 @@ class Head(nn.Module):
         self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size))) # lower triangular matrix
         
     def forward(self, x):
-        B, T, C = x.shape
+        '''The essence of attention mechinism'''
+        B, T, C = x.shape # 这里的 c 是 head_size
         # compute query, key, value
-        k = self.key(x)
+        k = self.key(x) # 
         q = self.query(x)
         v = self.value(x)
         # compute attention scores (affinities)
@@ -129,10 +130,20 @@ class Head(nn.Module):
         wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf')) # (B, T, T)
         wei = F.softmax(wei, dim=-1) # (B, T, T)
         # compute output
-        out = wei @ v # (B, T, T) @ (B, T, C) -> (B, T, C)
+        out = wei @ v # (B, T, T) @ (B, T, T) = (B, T, T) T is equal to head_size
         return out
     
         
+class MultiHeadAttention(nn.Module):
+    # multi-head self attention
+    # 这里的 multi-head attention 是将多个 head 的输出拼接在一起，然后通过一个线性层进行映射
+    def __init__(self, num_heads, head_size):
+        super().__init__()
+        self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
+        
+    def forward(self, x):
+        return torch.cat([h(x) for h in self.heads], dim=-1) # (B, T, C) -> (B, T, num_heads * head_size)
+    
 class BigramLanguageModel(nn.Module):
     
     def __init__(self):
@@ -149,7 +160,7 @@ class BigramLanguageModel(nn.Module):
         # 由于位置信息被 embedding 了，所以 block_size 决定了模型的上下文长度，也就是模型一步“学习”能够看到的 token 的数量
         # 这就有点像我们的注意力机制了，你阅读一段文字的时候，可能最多会关注到前面的几个字/几句话。
         self.position_embedding_table = nn.Embedding(block_size, n_embd) # block_size, C
-        self.sa_head = Head(n_embd)
+        self.sa_heads = MultiHeadAttention(num_heads=4, head_size=n_embd//4) # 4 heads, 32/4 = 8
         self.lm_head = nn.Linear(n_embd, vocab_size) # C, vocab_size 将 embedding 映射回 vocab_size
     
     def forward(self, idx, target=None):
@@ -162,6 +173,8 @@ class BigramLanguageModel(nn.Module):
         token_embd = self.token_embedding_table(idx) # B, T, C 4, 8, 32
         pos_embd = self.position_embedding_table(torch.arange(T, device=device)) # B, T, C 4, 8, 32
         x = token_embd + pos_embd # B, T, C 4, 8, 32
+        x = self.sa_heads(x) # B, T, C 4, 8, 32
+        # print("x shape: ", x.shape)
         logits = self.lm_head(x) # B, T, vocab_size 4, 8, 65
         
         if target is None:
