@@ -140,9 +140,12 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, num_heads, head_size):
         super().__init__()
         self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
-        
+        self.projection = nn.Linear(n_embd, n_embd)
+
     def forward(self, x):
-        return torch.cat([h(x) for h in self.heads], dim=-1) # (B, T, C) -> (B, T, num_heads * head_size)
+        out = torch.cat([h(x) for h in self.heads], dim=-1) # (B, T, C) -> (B, T, num_heads * head_size)
+        out = self.projection(out) # (B, T, num_heads * head_size) -> (B, T, C)
+        return out # (B, T, C)
     
 class FeedForward(nn.Module):
     """a simple feed forward layer"""
@@ -150,9 +153,11 @@ class FeedForward(nn.Module):
     
     def __init__(self, n_embd):
         super().__init__()
+        # 根据论文，FFN 中将 embedding 维度扩大到 4 倍，然后再缩小
         self.net = nn.Sequential(
-            nn.Linear(n_embd, n_embd),
+            nn.Linear(n_embd, 4 * n_embd),
             nn.ReLU(),
+            nn.Linear(4 * n_embd, n_embd),
         )
         # output: (batch_size, n_embd)
         
@@ -169,8 +174,8 @@ class Block(nn.Module):
     
     def forward(self, x):
         # residual connection
-        x = self.sa(x)
-        x = self.ffw(x)
+        x = x + self.sa(x)
+        x = x + self.ffw(x)
         return x
     
 class BigramLanguageModel(nn.Module):
@@ -190,6 +195,9 @@ class BigramLanguageModel(nn.Module):
         # 这就有点像我们的注意力机制了，你阅读一段文字的时候，可能最多会关注到前面的几个字/几句话。
         self.position_embedding_table = nn.Embedding(block_size, n_embd) # block_size, C
         self.sa_heads = MultiHeadAttention(num_heads=4, head_size=n_embd//4) # 4 heads, 32/4 = 8
+        self.blocks = nn.Sequential(
+            *[Block(n_embd, n_heads=4) for _ in range(3)] # 3 blocks
+        )
         self.ffw = FeedForward(n_embd) # feed forward network
         # 这里的 ffw 是一个简单的线性层，实际上可以是一个更复杂的网络
         self.lm_head = nn.Linear(n_embd, vocab_size) # C, vocab_size 将 embedding 映射回 vocab_size
