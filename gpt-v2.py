@@ -15,6 +15,7 @@ eval_iters = 200 # number of evaluation iterations
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print("device: ", device)
 n_embd = 32 # embedding dimension
+n_layer = 3 # number of layers
 
 # NOTE: this is a simple bigram model, which is a simple linear model
 # that predicts the next character based on the previous character
@@ -171,11 +172,14 @@ class Block(nn.Module):
         head_size = n_embd // n_heads
         self.sa = MultiHeadAttention(num_heads=n_heads, head_size=head_size) # multi-head attention
         self.ffw = FeedForward(n_embd)
+        self.ln1 = nn.LayerNorm(n_embd) # layer normalization 
+        self.ln2 = nn.LayerNorm(n_embd) 
+        # TODO: more detial of layer norm implementation in make more series: https://www.youtube.com/watch?v=TCH_1BHY58I&t=5s&ab_channel=AndrejKarpathy
     
     def forward(self, x):
         # residual connection
-        x = x + self.sa(x)
-        x = x + self.ffw(x)
+        x = x + self.sa(self.ln1(x))
+        x = x + self.ffw(self.ln2(x))
         return x
     
 class BigramLanguageModel(nn.Module):
@@ -194,12 +198,13 @@ class BigramLanguageModel(nn.Module):
         # 由于位置信息被 embedding 了，所以 block_size 决定了模型的上下文长度，也就是模型一步“学习”能够看到的 token 的数量
         # 这就有点像我们的注意力机制了，你阅读一段文字的时候，可能最多会关注到前面的几个字/几句话。
         self.position_embedding_table = nn.Embedding(block_size, n_embd) # block_size, C
-        self.sa_heads = MultiHeadAttention(num_heads=4, head_size=n_embd//4) # 4 heads, 32/4 = 8
         self.blocks = nn.Sequential(
-            *[Block(n_embd, n_heads=4) for _ in range(3)] # 3 blocks
+            *[Block(n_embd, n_heads=4) for _ in range(n_layer)], # 3 blocks
+            nn.LayerNorm(n_embd),
         )
         self.ffw = FeedForward(n_embd) # feed forward network
         # 这里的 ffw 是一个简单的线性层，实际上可以是一个更复杂的网络
+        self.ln_f = nn.LayerNorm(n_embd) # layer normalization
         self.lm_head = nn.Linear(n_embd, vocab_size) # C, vocab_size 将 embedding 映射回 vocab_size
     
     def forward(self, idx, target=None):
@@ -212,7 +217,8 @@ class BigramLanguageModel(nn.Module):
         token_embd = self.token_embedding_table(idx) # B, T, C 4, 8, 32
         pos_embd = self.position_embedding_table(torch.arange(T, device=device)) # B, T, C 4, 8, 32
         x = token_embd + pos_embd # B, T, C 4, 8, 32
-        x = self.sa_heads(x) # B, T, C 4, 8, 32
+        x = self.blocks(x) # B, T, C 4, 8, 32
+        x = self.ln_f(x) # B, T, C 4, 8, 32
         x = self.ffw(x)
         # print("x shape: ", x.shape)
         logits = self.lm_head(x) # B, T, vocab_size 4, 8, 65

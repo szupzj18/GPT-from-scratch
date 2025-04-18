@@ -12,17 +12,20 @@ build a simple language model using pytorch & cuda.
 - [x] feed forward network (FFN).
 - [x] projection. projecting multi-head attention back to same space.
 - [x] residual connection.
-- [ ] transformer block.
+- [x] transformer block.
+- [x] dropout: adding random dropout into training process, avoid over fitting.
 - [ ] layer norm.
 
 ## Getting started
 
 install deps:
+
 ```bash
 python3 -m pip install -r requirements.txt
 ```
 
 run demo:
+
 ```bash
 python3 gpt-v2.py
 ```
@@ -38,6 +41,7 @@ KHyQTBeIvJfK
 ```
 
 training steps
+
 ```shell
 step 0: train loss 4.1909, val loss 4.1939
 step 1000: train loss 2.5132, val loss 2.5148
@@ -51,11 +55,13 @@ step 8000: train loss 2.1955, val loss 2.2494
 step 9000: train loss 2.1921, val loss 2.2390
 ------------
 ```
+
 after 10000 steps training, loss get to ~2.23.
 
 lets try to get 400 tokens output...
 
-v2 generate: 
+v2 generate:
+
 ```shell
  XES:
 Gat?
