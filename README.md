@@ -14,7 +14,8 @@ build a simple language model using pytorch & cuda.
 - [x] residual connection.
 - [x] transformer block.
 - [x] dropout: adding random dropout into training process, avoid over fitting.
-- [ ] layer norm.
+- [x] layer norm.
+- [ ] refactoring the file into model.py & training.py 😏
 
 ## Getting started
 
