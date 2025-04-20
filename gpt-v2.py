@@ -16,6 +16,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print("device: ", device)
 n_embd = 32 # embedding dimension
 n_layer = 3 # number of layers
+dropout = 0.2 # dropout rate
 
 # NOTE: this is a simple bigram model, which is a simple linear model
 # that predicts the next character based on the previous character
@@ -115,6 +116,7 @@ class Head(nn.Module):
         self.query = nn.Linear(n_embd, head_size, bias=False)
         self.value = nn.Linear(n_embd, head_size, bias=False)
         self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size))) # lower triangular matrix
+        self.dropout = nn.Dropout(dropout)
         
     def forward(self, x):
         '''The essence of attention mechinism'''
@@ -130,6 +132,7 @@ class Head(nn.Module):
         wei = (q @ k.transpose(-2, -1)) * (C ** -0.5) # (B, T, T)
         wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf')) # (B, T, T)
         wei = F.softmax(wei, dim=-1) # (B, T, T)
+        wei = self.dropout(wei) # (B, T, T)
         # compute output
         out = wei @ v # (B, T, T) @ (B, T, T) = (B, T, T) T is equal to head_size
         return out
@@ -142,10 +145,11 @@ class MultiHeadAttention(nn.Module):
         super().__init__()
         self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
         self.projection = nn.Linear(n_embd, n_embd)
+        self.dropout = nn.Dropout(dropout) # dropout layer, 10% dropout rate
 
     def forward(self, x):
         out = torch.cat([h(x) for h in self.heads], dim=-1) # (B, T, C) -> (B, T, num_heads * head_size)
-        out = self.projection(out) # (B, T, num_heads * head_size) -> (B, T, C)
+        out = self.dropout(self.projection(out)) # (B, T, num_heads * head_size) -> (B, T, C)
         return out # (B, T, C)
     
 class FeedForward(nn.Module):
@@ -159,6 +163,7 @@ class FeedForward(nn.Module):
             nn.Linear(n_embd, 4 * n_embd),
             nn.ReLU(),
             nn.Linear(4 * n_embd, n_embd),
+            nn.Dropout(dropout) # dropout layer, 10% dropout rate
         )
         # output: (batch_size, n_embd)
         
@@ -199,7 +204,7 @@ class BigramLanguageModel(nn.Module):
         # 这就有点像我们的注意力机制了，你阅读一段文字的时候，可能最多会关注到前面的几个字/几句话。
         self.position_embedding_table = nn.Embedding(block_size, n_embd) # block_size, C
         self.blocks = nn.Sequential(
-            *[Block(n_embd, n_heads=4) for _ in range(n_layer)], # 3 blocks
+            *[Block(n_embd, n_head) for _ in range(n_layer)], # 3 blocks
             nn.LayerNorm(n_embd),
         )
         self.ffw = FeedForward(n_embd) # feed forward network
